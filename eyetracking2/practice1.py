@@ -77,8 +77,8 @@ def get_gaze_ratio(eye_points, facial_landmarks):
     right_side_threshold = threshold_eye[0: height, int(width / 2): width]
     right_side_white = cv2.countNonZero(right_side_threshold)
 
-    cv2.imshow("left", left_side_threshold)
-    cv2.imshow("right", right_side_threshold)
+    # cv2.imshow("left", left_side_threshold)
+    # cv2.imshow("right", right_side_threshold)
 
     # left, right side white 가 10 미만이면 눈 감은것으로 인식
     if left_side_white < 10 or right_side_white < 10:
@@ -91,10 +91,62 @@ def get_gaze_ratio(eye_points, facial_landmarks):
 
 
 
+def get_head_angle_ratio(head_points, facial_landmarks):
+
+
+    # 코의 가로선 표시
+    nose_region1 = np.array([(facial_landmarks.part(head_points[0]).x, facial_landmarks.part(head_points[0]).y),
+                            (facial_landmarks.part(head_points[1]).x, facial_landmarks.part(head_points[1]).y),
+                            (facial_landmarks.part(head_points[2]).x, facial_landmarks.part(head_points[2]).y),
+                            (facial_landmarks.part(head_points[3]).x, facial_landmarks.part(head_points[3]).y)],
+                            np.int32)
+    cv2.polylines(frame, [nose_region1], True, (0, 255, 255), 1)
+
+    # 코의 세로선 표시
+    nose_region2 = np.array([(facial_landmarks.part(head_points[4]).x, facial_landmarks.part(head_points[4]).y),
+                            (facial_landmarks.part(head_points[5]).x, facial_landmarks.part(head_points[5]).y),
+                            (facial_landmarks.part(head_points[6]).x, facial_landmarks.part(head_points[6]).y),
+                            (facial_landmarks.part(head_points[7]).x, facial_landmarks.part(head_points[7]).y),
+                            (facial_landmarks.part(head_points[8]).x, facial_landmarks.part(head_points[8]).y)],
+                            np.int32)
+    cv2.polylines(frame, [nose_region2], True, (0, 255, 255), 1)
+
+    # 코의 왼쪽 기준선 표시
+    nose_line_left = np.array([(facial_landmarks.part(head_points[3]).x, facial_landmarks.part(head_points[3]).y),
+                            (facial_landmarks.part(head_points[4]).x, facial_landmarks.part(head_points[4]).y)],
+                            np.int32)
+    cv2.polylines(frame, [nose_line_left], True, (255, 0, 255), 1)
+
+    # 코의 오른쪽 기준선 표시
+    nose_line_right = np.array([(facial_landmarks.part(head_points[3]).x, facial_landmarks.part(head_points[3]).y),
+                            (facial_landmarks.part(head_points[8]).x, facial_landmarks.part(head_points[8]).y)],
+                            np.int32)
+    cv2.polylines(frame, [nose_line_right], True, (255, 0, 255), 1)
+
+    nose_left_point = (facial_landmarks.part(head_points[4]).x, facial_landmarks.part(head_points[4]).y)
+    nose_right_point = (facial_landmarks.part(head_points[8]).x, facial_landmarks.part(head_points[8]).y)
+    nose_center_point = (facial_landmarks.part(head_points[3]).x, facial_landmarks.part(head_points[3]).y)
+
+    # 오른쪽 기준선과 왼쪽 기준선 길이 계산
+    nose_line_len1 = hypot(nose_left_point[0] - nose_center_point[0], nose_left_point[1] - nose_center_point[1])
+    nose_line_len2 = hypot(nose_right_point[0] - nose_center_point[0], nose_right_point[1] - nose_center_point[1])
+
+    if nose_line_len1 > nose_line_len2:
+        _head_direction = "right"
+        _nose_line_ratio = nose_line_len1 / nose_line_len2
+    else:
+        _head_direction = "left"
+        _nose_line_ratio = nose_line_len2 / nose_line_len1
+
+    return _head_direction, _nose_line_ratio
+
+
+
+
 """""""""""""""""""""""""""""""""""""""
 """"""     # MAIN FUNCTION #     """"""
 """""""""""""""""""""""""""""""""""""""
-cap = cv2.VideoCapture(1)
+cap = cv2.VideoCapture(0)
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
 font = cv2.FONT_HERSHEY_SIMPLEX
@@ -115,7 +167,10 @@ while True:
 
         # 눈을 추적하며 깜박임 감지
         if get_blinking_ratio(landmarks) > 3.7:   # 숫자가 높아질수록 엄격하게 감지
+            '''
             cv2.putText(frame, "Blink", (50, 150), font, 3, (255, 0, 0))
+            '''
+
 
 
         # 보는 방향 감지
@@ -123,22 +178,22 @@ while True:
         gaze_ratio_right_eye = get_gaze_ratio([42, 43, 44, 45, 46, 47], landmarks)
         gaze_ratio = (gaze_ratio_left_eye + gaze_ratio_right_eye) / 2
 
-        '''
-        if gaze_ratio < 0.75:
-            cv2.putText(frame, "RIGHT", (50, 100), font, 2, (0, 0, 255), 3)
-        elif 0.75 < gaze_ratio < 1.1:
-            cv2.putText(frame, "CENTER", (50, 100), font, 2, (0, 0, 255), 3)
-        else:
-            cv2.putText(frame, "LEFT", (50, 100), font, 2, (0, 0, 255), 3)
-        '''
-
-        # 숫자가 작아질수록 관대
-        if gaze_ratio < 0.55:
+        #    숫자가 작아질수록 관대
+        if gaze_ratio < 0.65:
             print("눈동자 오른쪽으로 벗어남\n")
 
-        # 숫자가 커질수록 관대
-        elif gaze_ratio > 2.2:
+        #    숫자가 커질수록 관대
+        elif gaze_ratio > 2:
             print("눈동자 왼쪽으로 벗어남\n")
+
+
+        # 고개 돌리는 방향 감지
+        head_direction = get_head_angle_ratio([27, 28, 29, 30, 31, 32, 33, 34, 35], landmarks)
+        direction = head_direction[0]
+        direction_ratio = head_direction[1]
+
+        print(head_direction)
+
 
     #Print ont the screen
     cv2.imshow("Frame", frame)
