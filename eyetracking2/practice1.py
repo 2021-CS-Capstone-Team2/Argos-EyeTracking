@@ -1,10 +1,10 @@
-from time import sleep
-
 import cv2
 import numpy as np
 import dlib
 from math import hypot
-import math
+import matplotlib.pyplot as plt
+import face_recognition
+
 
 """ determine mid point
 """
@@ -12,7 +12,7 @@ def midpoint(p1, p2):
     return int((p1.x + p2.x) / 2), int((p1.y + p2.y) / 2)
 
 
-""" Detect eye's location
+""" Detect face & eye's location
     and blinking
 """
 def get_blinking_ratio(facial_landmarks):
@@ -89,8 +89,8 @@ def get_gaze_ratio(eye_points, facial_landmarks):
     return _gaze_ratio
 
 
-
-
+""" Detect head's direction
+"""
 def get_head_angle_ratio(head_points, facial_landmarks):
 
 
@@ -141,6 +141,28 @@ def get_head_angle_ratio(head_points, facial_landmarks):
     return _head_direction, _nose_line_ratio
 
 
+""" Compare faces
+"""
+def compare_faces(_frame, _num_faces, _temp_faces_for_compare):
+    if _num_faces == 1:
+        _temp_faces_for_compare = (None, None)
+        imgS = cv2.cvtColor(_frame, cv2.COLOR_BGR2RGB)
+        facesCurFrame = face_recognition.face_locations(imgS)
+        encodedCurFrame = face_recognition.face_encodings(imgS, facesCurFrame)
+        _temp_faces_for_compare = (facesCurFrame, encodedCurFrame, False)
+        return _temp_faces_for_compare
+
+    elif _num_faces == 2:
+        imgS = cv2.cvtColor(_frame, cv2.COLOR_BGR2RGB)
+        facesCurFrame = face_recognition.face_locations(imgS)
+        encodedCurFrame = face_recognition.face_encodings(imgS, facesCurFrame)
+
+        matches = face_recognition.compare_faces(_temp_faces_for_compare[1][0], encodedCurFrame)
+        distance = face_recognition.face_distance(_temp_faces_for_compare[1][0], encodedCurFrame)
+        print(distance)
+        _temp_faces_for_compare = (None, None, True)
+        return _temp_faces_for_compare
+
 
 
 """""""""""""""""""""""""""""""""""""""
@@ -150,28 +172,26 @@ cap = cv2.VideoCapture(0)
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
 font = cv2.FONT_HERSHEY_SIMPLEX
+Is_compared = False
+temp_faces_for_compare = (None, None, Is_compared)
+
 
 while True:
     _, frame = cap.read()
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = detector(gray)
-
-    # 네모 감지 부분
-
-
+    num_faces = 0
 
     # 얼굴 인식 부분
     for face in faces:
+        num_faces += 1
         landmarks = predictor(gray, face)
-
 
         # 눈을 추적하며 깜박임 감지
         if get_blinking_ratio(landmarks) > 3.7:   # 숫자가 높아질수록 엄격하게 감지
             '''
             cv2.putText(frame, "Blink", (50, 150), font, 3, (255, 0, 0))
             '''
-
-
 
         # 보는 방향 감지
         gaze_ratio_left_eye = get_gaze_ratio([36, 37, 38, 39, 40, 41], landmarks)
@@ -191,8 +211,10 @@ while True:
         head_direction = get_head_angle_ratio([27, 28, 29, 30, 31, 32, 33, 34, 35], landmarks)
         direction = head_direction[0]
         direction_ratio = head_direction[1]
+        # print(head_direction)
 
-        print(head_direction)
+        if(not temp_faces_for_compare[2]):
+            temp_faces_for_compare = compare_faces(frame, num_faces, temp_faces_for_compare)
 
 
     #Print ont the screen
