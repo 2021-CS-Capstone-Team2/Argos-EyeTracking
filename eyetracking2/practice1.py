@@ -2,7 +2,6 @@ import cv2
 import numpy as np
 import dlib
 from math import hypot
-import matplotlib.pyplot as plt
 import face_recognition
 
 
@@ -133,34 +132,38 @@ def get_head_angle_ratio(head_points, facial_landmarks):
 
     if nose_line_len1 > nose_line_len2:
         _head_direction = "right"
-        _nose_line_ratio = nose_line_len1 / nose_line_len2
+        _direction_ratio = nose_line_len1 / nose_line_len2
     else:
         _head_direction = "left"
-        _nose_line_ratio = nose_line_len2 / nose_line_len1
+        _direction_ratio = nose_line_len2 / nose_line_len1
 
-    return _head_direction, _nose_line_ratio
+    return _head_direction, _direction_ratio
 
 
 """ Compare faces
 """
 def compare_faces(_frame, _num_faces, _temp_faces_for_compare):
     if _num_faces == 1:
-        _temp_faces_for_compare = (None, None)
+        _temp_faces_for_compare = (0, 0)
         imgS = cv2.cvtColor(_frame, cv2.COLOR_BGR2RGB)
-        facesCurFrame = face_recognition.face_locations(imgS)
-        encodedCurFrame = face_recognition.face_encodings(imgS, facesCurFrame)
-        _temp_faces_for_compare = (facesCurFrame, encodedCurFrame, False)
+        faceLocation = face_recognition.face_locations(imgS)
+        encodedCurFrame = face_recognition.face_encodings(imgS, faceLocation)
+        _temp_faces_for_compare = (faceLocation, encodedCurFrame, True)
         return _temp_faces_for_compare
 
     elif _num_faces == 2:
         imgS = cv2.cvtColor(_frame, cv2.COLOR_BGR2RGB)
-        facesCurFrame = face_recognition.face_locations(imgS)
-        encodedCurFrame = face_recognition.face_encodings(imgS, facesCurFrame)
+        faceLocation = face_recognition.face_locations(imgS)
+        encodedCurFrame = face_recognition.face_encodings(imgS, faceLocation)
 
-        matches = face_recognition.compare_faces(_temp_faces_for_compare[1][0], encodedCurFrame)
-        distance = face_recognition.face_distance(_temp_faces_for_compare[1][0], encodedCurFrame)
+        matches = face_recognition.compare_faces((_temp_faces_for_compare[1])[0], encodedCurFrame)
+        distance = face_recognition.face_distance((_temp_faces_for_compare[1])[0], encodedCurFrame)
+        if(distance[0] == 0):
+            distance = distance[1]
+        else:
+            distance = distance[0]
         print(distance)
-        _temp_faces_for_compare = (None, None, True)
+        _temp_faces_for_compare = (None, None, False)
         return _temp_faces_for_compare
 
 
@@ -172,8 +175,24 @@ cap = cv2.VideoCapture(0)
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
 font = cv2.FONT_HERSHEY_SIMPLEX
-Is_compared = False
-temp_faces_for_compare = (None, None, Is_compared)
+
+# 얼굴 인식 활성화 여부 확인
+Activated = False
+
+# 얼굴 인식 위한 변수
+temp_faces_for_compare = (None, None, Activated)
+
+# 초반 고개/눈 방향 기준 설정 위한 변수들
+head_direction_sum = 0
+eye_direction_sum = 0
+num_frames = 0
+
+# 초반 고개/눈 방향 기준 설정 여부 확인
+criteria_finished = False
+
+# 눈 방향 탐지 위한 마진 (낮을수록 엄격하게 탐지)
+margin_eye = 0.3
+margin_head = 0.3
 
 
 while True:
@@ -181,6 +200,7 @@ while True:
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = detector(gray)
     num_faces = 0
+
 
     # 얼굴 인식 부분
     for face in faces:
@@ -197,33 +217,66 @@ while True:
         gaze_ratio_left_eye = get_gaze_ratio([36, 37, 38, 39, 40, 41], landmarks)
         gaze_ratio_right_eye = get_gaze_ratio([42, 43, 44, 45, 46, 47], landmarks)
         gaze_ratio = (gaze_ratio_left_eye + gaze_ratio_right_eye) / 2
+        eye_direction_sum += gaze_ratio
+        # print(gaze_ratio)
+
+        if num_frames == 100:
+            eye_direction_criteria = (eye_direction_sum / num_frames)
+            print("EYE : {}" .format(eye_direction_criteria))
 
         #    숫자가 작아질수록 관대
-        if gaze_ratio < 0.65:
-            print("눈동자 오른쪽으로 벗어남\n")
-
+        if criteria_finished and gaze_ratio < eye_direction_criteria - margin_eye:
+            print("눈동자 왼쪽으로 벗어남")
+            print(gaze_ratio)
         #    숫자가 커질수록 관대
-        elif gaze_ratio > 2:
-            print("눈동자 왼쪽으로 벗어남\n")
+        elif criteria_finished and gaze_ratio > eye_direction_criteria + margin_eye:
+            print("눈동자 오른쪽으로 벗어남")
+            print(gaze_ratio)
 
 
         # 고개 돌리는 방향 감지
         head_direction = get_head_angle_ratio([27, 28, 29, 30, 31, 32, 33, 34, 35], landmarks)
         direction = head_direction[0]
         direction_ratio = head_direction[1]
-        # print(head_direction)
+        num_frames += 1
+        if direction == "left" and (not criteria_finished):
+            head_direction_sum += (direction_ratio - 1) * (-1)
+            # print(head_direction_sum)
+        elif direction == "right" and (not criteria_finished):
+            head_direction_sum += (direction_ratio - 1)
+            # print(head_direction_sum)
 
-        if(not temp_faces_for_compare[2]):
+        if num_frames == 100:
+            head_direction_criteria = (head_direction_sum / num_frames)
+            print("HEAD : {}" .format(head_direction_criteria))
+            criteria_finished = True
+            
+        # 수정필요    
+        if criteria_finished:
+            if head_direction[0] == "left" and head_direction[1] < 1 + head_direction_criteria - margin_head:
+                print("고개 왼쪽으로 벗어남")
+                print(head_direction[1])
+            elif head_direction[0] == "right" and head_direction[1] > 1 + head_direction_criteria + margin_head:
+                print("고개 오른쪽으로 벗어남")
+                print(head_direction[1])
+
+
+        # 얼굴을 통한 신원확인
+        if temp_faces_for_compare[2]:
             temp_faces_for_compare = compare_faces(frame, num_faces, temp_faces_for_compare)
 
 
     #Print ont the screen
     cv2.imshow("Frame", frame)
 
-    #Press ESC to exit
     key = cv2.waitKey(1)
+    # ESC 입력시 프로그램 종료
     if key == 27:
         break
+    # 신원확인 필요시 p 키 입력
+    elif key == 112:
+        temp_faces_for_compare = (0, 0, True)
+
 
 cap.release()
 cv2.destroyAllWindows()
