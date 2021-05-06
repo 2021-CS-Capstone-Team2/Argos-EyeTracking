@@ -226,12 +226,14 @@ while True:
 
         #    숫자가 작아질수록 관대
         if criteria_finished and gaze_ratio < eye_direction_criteria - margin_eye:
-            print("눈동자 왼쪽으로 벗어남")
-            print(gaze_ratio)
+            # print("눈동자 왼쪽으로 벗어남")
+            # print(gaze_ratio)
+            _
         #    숫자가 커질수록 관대
         elif criteria_finished and gaze_ratio > eye_direction_criteria + margin_eye:
-            print("눈동자 오른쪽으로 벗어남")
-            print(gaze_ratio)
+            # print("눈동자 오른쪽으로 벗어남")
+            # print(gaze_ratio)
+            _
 
 
         # 고개 돌리는 방향 감지
@@ -254,11 +256,13 @@ while True:
         # 수정필요    
         if criteria_finished:
             if head_direction[0] == "left" and head_direction[1] < 1 + head_direction_criteria - margin_head:
-                print("고개 왼쪽으로 벗어남")
-                print(head_direction[1])
+                #print("고개 왼쪽으로 벗어남")
+                # print(head_direction[1])
+                _
             elif head_direction[0] == "right" and head_direction[1] > 1 + head_direction_criteria + margin_head:
-                print("고개 오른쪽으로 벗어남")
-                print(head_direction[1])
+                # print("고개 오른쪽으로 벗어남")
+                # print(head_direction[1])
+                _
 
 
         # 얼굴을 통한 신원확인
