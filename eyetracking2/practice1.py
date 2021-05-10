@@ -6,8 +6,6 @@ import face_recognition
 
 """ determine mid point
 """
-
-
 def midpoint(p1, p2):
     return int((p1.x + p2.x) / 2), int((p1.y + p2.y) / 2)
 
@@ -15,8 +13,6 @@ def midpoint(p1, p2):
 """ Detect face & eye's location
     and blinking
 """
-
-
 def get_blinking_ratio(facial_landmarks):
     left_point1 = (facial_landmarks.part(36).x, facial_landmarks.part(36).y)
     right_point1 = (facial_landmarks.part(39).x, facial_landmarks.part(39).y)
@@ -47,8 +43,6 @@ def get_blinking_ratio(facial_landmarks):
 
 """ Detect eye's gazing
 """
-
-
 def get_gaze_ratio(eye_points, facial_landmarks, _gray, _frame):
     eye_region = np.array([(facial_landmarks.part(eye_points[0]).x, facial_landmarks.part(eye_points[0]).y),
                            (facial_landmarks.part(eye_points[1]).x, facial_landmarks.part(eye_points[1]).y),
@@ -94,8 +88,6 @@ def get_gaze_ratio(eye_points, facial_landmarks, _gray, _frame):
 
 """ Detect head's direction
 """
-
-
 def get_head_angle_ratio(head_points, facial_landmarks, _frame):
     # 코의 가로선 표시
     nose_region1 = np.array([(facial_landmarks.part(head_points[0]).x, facial_landmarks.part(head_points[0]).y),
@@ -146,8 +138,6 @@ def get_head_angle_ratio(head_points, facial_landmarks, _frame):
 
 """ Compare faces
 """
-
-
 def compare_faces(_frame, _num_faces, _temp_faces_for_compare):
     if _num_faces == 1:
         _temp_faces_for_compare = (0, 0)
@@ -164,13 +154,76 @@ def compare_faces(_frame, _num_faces, _temp_faces_for_compare):
 
         matches = face_recognition.compare_faces((_temp_faces_for_compare[1])[0], encodedCurFrame)
         distance = face_recognition.face_distance((_temp_faces_for_compare[1])[0], encodedCurFrame)
-        if (distance[0] == 0):
+        if distance[0] == 0:
             distance = distance[1]
         else:
             distance = distance[0]
         print(distance)
         _temp_faces_for_compare = (None, None, False)
         return _temp_faces_for_compare
+
+
+""" Set criteria
+"""
+def set_criteria(_direction, _num_frames, _head_direction_sum,
+                 _criteria_finished, _direction_ratio, _eye_direction_sum):
+
+    _head_direction_criteria = 0
+    _eye_direction_criteria = 0
+
+    _num_frames += 1
+    if _direction == "left" and (not _criteria_finished):
+        _head_direction_sum += (_direction_ratio - 1) * (-1)
+        # print(head_direction_sum)
+    elif _direction == "right" and (not _criteria_finished):
+        _head_direction_sum += (_direction_ratio - 1)
+        # print(head_direction_sum)
+
+    if _num_frames == 100:
+        _head_direction_criteria = (_head_direction_sum / _num_frames)
+        print("HEAD : {}".format(_head_direction_criteria))
+        _criteria_finished = True
+
+    if _num_frames == 100:
+        _eye_direction_criteria = (_eye_direction_sum / _num_frames)
+        print("EYE : {}".format(_eye_direction_criteria))
+
+    return _head_direction_criteria, _eye_direction_criteria, _criteria_finished, _num_frames
+
+
+def warn_eye_direction(_criteria_finished, _gaze_ratio, _eye_direction_criteria, _margin_eye):
+    #    숫자가 작아질수록 관대
+    if _criteria_finished and _gaze_ratio < _eye_direction_criteria - _margin_eye:
+        print("눈동자 왼쪽으로 벗어남")
+        print(_gaze_ratio)
+
+    #    숫자가 커질수록 관대
+    elif _criteria_finished and _gaze_ratio > _eye_direction_criteria + _margin_eye:
+        print("눈동자 오른쪽으로 벗어남")
+        print(_gaze_ratio)
+        print(_eye_direction_criteria, _margin_eye)
+
+
+""" Head angle warning algorithm
+"""
+def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_direction, _margin_head):
+    # 왼쪽 바라볼때
+    if _criteria_finished and _head_direction_criteria < 0:
+        if _head_direction[0] == "left" and _head_direction[1] > 1 - _head_direction_criteria + _margin_head:
+            print("고개 왼쪽으로 벗어남")
+
+        elif _head_direction[0] == "right" and _head_direction[1] > 1 + _head_direction_criteria + _margin_head:
+            print("고개 오른쪽으로 벗어남")
+
+    # 오른쪽 바라볼때
+    if _criteria_finished and _head_direction_criteria >= 0:
+        if _head_direction[0] == "left" and _head_direction[1] > 1 - _head_direction_criteria + _margin_head:
+            print("고개 왼쪽으로 벗어남")
+            print(_head_direction)
+
+        elif _head_direction[0] == "right" and _head_direction[1] > 1 + _head_direction_criteria + _margin_head:
+            print("고개 오른쪽으로 벗어남")
+            print(_head_direction)
 
 
 """""""""""""""""""""""""""""""""""""""
@@ -191,14 +244,16 @@ def main():
     # 초반 고개/눈 방향 기준 설정 위한 변수들
     head_direction_sum = 0
     eye_direction_sum = 0
+    head_direction_criteria = 0
+    eye_direction_criteria = 0
     num_frames = 0
 
     # 초반 고개/눈 방향 기준 설정 여부 확인
     criteria_finished = False
 
     # 눈 방향 탐지 위한 마진 (낮을수록 엄격하게 탐지)
-    margin_eye = 1
-    margin_head = 0.4
+    margin_eye = 0.8
+    margin_head = 0.5
 
     while True:
         _, frame = cap.read()
@@ -225,57 +280,22 @@ def main():
             eye_direction_sum += gaze_ratio
             # print(gaze_ratio)
 
-            if num_frames == 100:
-                eye_direction_criteria = (eye_direction_sum / num_frames)
-                print("EYE : {}".format(eye_direction_criteria))
-
-            #    숫자가 작아질수록 관대
-            if criteria_finished and gaze_ratio < eye_direction_criteria - margin_eye:
-                print("눈동자 왼쪽으로 벗어남")
-                print(gaze_ratio)
-
-            #    숫자가 커질수록 관대
-            elif criteria_finished and gaze_ratio > eye_direction_criteria + margin_eye:
-                print("눈동자 오른쪽으로 벗어남")
-                print(gaze_ratio)
-
-
             # 고개 돌리는 방향 감지
             head_direction = get_head_angle_ratio([27, 28, 29, 30, 31, 32, 33, 34, 35], landmarks, frame)
             direction = head_direction[0]
             direction_ratio = head_direction[1]
-            num_frames += 1
-            if direction == "left" and (not criteria_finished):
-                head_direction_sum += (direction_ratio - 1) * (-1)
-                # print(head_direction_sum)
-            elif direction == "right" and (not criteria_finished):
-                head_direction_sum += (direction_ratio - 1)
-                # print(head_direction_sum)
 
-            if num_frames == 100:
-                head_direction_criteria = (head_direction_sum / num_frames)
-                print("HEAD : {}".format(head_direction_criteria))
-                criteria_finished = True
+            # 최초 100프레임동안 고개, 눈동자 기준설정
+            if not criteria_finished:
+                head_direction_criteria, eye_direction_criteria, criteria_finished, num_frames \
+                    = set_criteria(direction, num_frames, head_direction_sum,
+                                   criteria_finished, direction_ratio, eye_direction_sum)
 
-            # 왼쪽 바라볼때
-            if criteria_finished and head_direction_criteria < 0:
-                if head_direction[0] == "left" and head_direction[1] > 1 - head_direction_criteria + margin_head:
-                    print("고개 왼쪽으로 벗어남")
-                    print(head_direction)
+            # 눈동자가 인가된 범위를 벗어나면 경고
+            warn_eye_direction(criteria_finished, gaze_ratio, eye_direction_criteria, margin_eye)
 
-                elif head_direction[0] == "right" and head_direction[1] > 1 + head_direction_criteria + margin_head:
-                    print("고개 오른쪽으로 벗어남")
-                    print(head_direction)
-
-            # 오른쪽 바라볼때
-            if criteria_finished and head_direction_criteria >= 0:
-                if head_direction[0] == "left" and head_direction[1] > 1 - head_direction_criteria + margin_head:
-                    print("고개 왼쪽으로 벗어남")
-                    print(head_direction)
-
-                elif head_direction[0] == "right" and head_direction[1] > 1 + head_direction_criteria + margin_head:
-                    print("고개 오른쪽으로 벗어남")
-                    print(head_direction)
+            # 고개가 인가된 범위를 벗어나면 경고
+            warn_head_direction(criteria_finished, head_direction_criteria, head_direction, margin_head)
 
             # 얼굴을 통한 신원확인
             if temp_faces_for_compare[2]:
