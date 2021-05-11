@@ -12,16 +12,16 @@ short_cheating_count = 0
 long_cheating_count = 0
 is_time_counting_eye = False
 is_time_counting_head = False
-start_time = 0
+start_time_eye = 0
+start_time_head = 0
 criteria_frame_num = 50
-
-
 
 
 """ determine mid point
 """
 def midpoint(p1, p2):
     return int((p1.x + p2.x) / 2), int((p1.y + p2.y) / 2)
+
 
 
 """ Detect face & eye's location
@@ -53,6 +53,7 @@ def get_blinking_ratio(facial_landmarks):
     blink_ratio = (blink_ratio_left + blink_ratio_right) / 2
 
     return blink_ratio
+
 
 
 """ Detect eye's gazing
@@ -98,6 +99,7 @@ def get_gaze_ratio(eye_points, facial_landmarks, _gray, _frame):
         _gaze_ratio = left_side_white / right_side_white
 
     return _gaze_ratio
+
 
 
 """ Detect head's direction
@@ -150,6 +152,7 @@ def get_head_angle_ratio(head_points, facial_landmarks, _frame):
     return _head_direction, _direction_ratio
 
 
+
 """ Compare faces
 """
 def compare_faces(_frame, _num_faces, _temp_faces_for_compare):
@@ -175,6 +178,7 @@ def compare_faces(_frame, _num_faces, _temp_faces_for_compare):
         print(distance)
         _temp_faces_for_compare = (None, None, False)
         return _temp_faces_for_compare
+
 
 
 """ Set criteria
@@ -207,13 +211,14 @@ def set_criteria(_direction, _num_frames, _head_direction_sum,
     return _head_direction_criteria, _eye_direction_criteria, _criteria_finished, _num_frames
 
 
+
 def warn_eye_direction(_criteria_finished, _gaze_ratio, _eye_direction_criteria, _margin_eye):
-    global is_time_counting_eye, start_time
+    global is_time_counting_eye, start_time_eye
 
     #    숫자가 작아질수록 관대
     if _criteria_finished and _gaze_ratio < _eye_direction_criteria - _margin_eye:
         if not is_time_counting_eye:
-            start_time = time.time()
+            start_time_eye = time.time()
             is_time_counting_eye = True
             print("시간 계산중...")
         #print("눈동자 왼쪽으로 벗어남")
@@ -222,7 +227,7 @@ def warn_eye_direction(_criteria_finished, _gaze_ratio, _eye_direction_criteria,
     #    숫자가 커질수록 관대
     elif _criteria_finished and _gaze_ratio > _eye_direction_criteria + _margin_eye:
         if not is_time_counting_eye:
-            start_time = time.time()
+            start_time_eye = time.time()
             is_time_counting_eye = True
             print("시간 계산중...")
         #print("눈동자 오른쪽으로 벗어남")
@@ -230,29 +235,31 @@ def warn_eye_direction(_criteria_finished, _gaze_ratio, _eye_direction_criteria,
 
     else:
         if is_time_counting_eye:
-            print("종료")
-            print(time.time() - start_time)
+            print("종료[e]")
+            duration = time.time() - start_time_eye
+            print("duration : {}".format(duration))
+            count_cheating(duration)
             is_time_counting_eye = False
 
 
 """ Head angle warning algorithm
 """
 def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_direction, _margin_head):
-    global start_time, is_time_counting_head
+    global start_time_head, is_time_counting_head
 
     # 왼쪽 바라볼때
     if _criteria_finished and _head_direction_criteria < 0:
         if _head_direction[0] == "left" and _head_direction[1] > 1 - _head_direction_criteria + _margin_head:
             if not is_time_counting_head:
-                start_time = time.time()
+                start_time_head = time.time()
                 is_time_counting_head = True
                 print("시간 계산중...")
-            #print("고개 왼쪽으로 벗어남")
+            print("고개 왼쪽으로 벗어남")
             #print(_head_direction)
 
         elif _head_direction[0] == "right" and _head_direction[1] > 1 + _head_direction_criteria + _margin_head:
             if not is_time_counting_head:
-                start_time = time.time()
+                start_time_head = time.time()
                 is_time_counting_head = True
                 print("시간 계산중...")
             #print("고개 오른쪽으로 벗어남")
@@ -260,15 +267,17 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
 
         else:
             if is_time_counting_head:
-                print("종료")
-                print(time.time() - start_time)
+                print("종료[h]")
+                duration = time.time() - start_time_head
+                print("duration : {}".format(duration))
+                count_cheating(duration)
                 is_time_counting_head = False
 
     # 오른쪽 바라볼때
     if _criteria_finished and _head_direction_criteria >= 0:
         if _head_direction[0] == "left" and _head_direction[1] > 1 - _head_direction_criteria + _margin_head:
             if not is_time_counting_head:
-                start_time = time.time()
+                start_time_head = time.time()
                 is_time_counting_head = True
                 print("시간 계산중...")
             #print("고개 왼쪽으로 벗어남")
@@ -276,7 +285,7 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
 
         elif _head_direction[0] == "right" and _head_direction[1] > 1 + _head_direction_criteria + _margin_head:
             if not is_time_counting_head:
-                start_time = time.time()
+                start_time_head = time.time()
                 is_time_counting_head = True
                 print("시간 계산중...")
             #print("고개 오른쪽으로 벗어남")
@@ -284,16 +293,40 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
 
         else:
             if is_time_counting_head:
-                print("종료")
-                print(time.time() - start_time)
+                print("종료[h]")
+                duration = time.time() - start_time_head
+                print("duration : {}".format(duration))
+                count_cheating(duration)
                 is_time_counting_head = False
 
 
 
 """ count the cheating frequency
 """
-# def count_cheatings():
+def count_cheating(_duration):
+    global short_cheating_count, long_cheating_count
 
+    if _duration < 5:
+        short_cheating_count += 1
+
+    elif _duration >= 5:
+        long_cheating_count += 1
+
+
+    if short_cheating_count == 5:
+        print("짧은 경고 5회 누적!")
+        short_cheating_count = 0
+
+    if long_cheating_count == 1:
+        print("긴 경고 1회 누적!")
+        long_cheating_count = 0
+
+
+""" detect no faces warning
+"""
+def warn_no_face(_duration):
+    if _duration > 10:
+        print("얼굴 감지 안됨 경고!")
 
 
 
@@ -312,6 +345,7 @@ def main():
 
     # 얼굴 인식 위한 변수
     temp_faces_for_compare = (None, None, Activated)
+    start_time_face = 0
 
     # 초반 고개/눈 방향 기준 설정 위한 변수들
     head_direction_sum = 0
@@ -324,8 +358,9 @@ def main():
     criteria_finished = False
 
     # 눈 방향 탐지 위한 마진 (낮을수록 엄격하게 탐지)
-    margin_eye = 0.7
-    margin_head = 0.5
+    margin_eye = 1
+    margin_head = 0.65
+
 
     while True:
         _, frame = cap.read()
@@ -335,7 +370,12 @@ def main():
 
         # 얼굴 인식 부분
         for face in faces:
+            # 일정 시간 이상 얼굴 탐지 안되면 경고
+            duration = time.time() - start_time_face
+            start_time_face = time.time()
+            warn_no_face(duration)
             num_faces += 1
+
             landmarks = predictor(gray, face)
 
             """
