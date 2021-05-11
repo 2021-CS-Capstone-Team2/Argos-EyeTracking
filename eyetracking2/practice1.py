@@ -8,6 +8,7 @@ import threading
 
 """ global variables
 """
+num_frames = 0
 short_cheating_count = 0
 long_cheating_count = 0
 is_time_counting_eye = False
@@ -15,6 +16,13 @@ is_time_counting_head = False
 start_time_eye = 0
 start_time_head = 0
 criteria_frame_num = 50
+warning_count = 1
+
+no_face_time = 10       # 몇초간 얼굴 탐지 안될 시 경고할지
+max_short_cheating = 5  # 짧은 시간 부정행위 횟수
+max_long_cheating = 1   # 짧은 시간 부정행위 횟수
+criteria_time = 5       # 짧은 시간 긴 시간 나누는 기준초
+
 
 
 """ determine mid point
@@ -37,11 +45,6 @@ def get_blinking_ratio(facial_landmarks):
     right_point2 = (facial_landmarks.part(45).x, facial_landmarks.part(45).y)
     center_top2 = midpoint(facial_landmarks.part(43), facial_landmarks.part(44))
     center_bottom2 = midpoint(facial_landmarks.part(47), facial_landmarks.part(46))
-
-    # cv2.line(frame, left_point1, right_point1, (0, 255, 0), 1)      # hor line 1
-    # cv2.line(frame, center_top1, center_bottom1, (0, 255, 0), 1)    # ver line 1
-    # cv2.line(frame, left_point2, right_point2, (0, 255, 0), 1)      # hor line 2
-    # cv2.line(frame, center_top2, center_bottom2, (0, 255, 0), 1)    # ver line 2
 
     ver_line_len1 = hypot((center_top1[0] - center_bottom1[0]), (center_top1[1] - center_bottom1[1]))
     hor_line_len1 = hypot((left_point1[0] - right_point1[0]), (left_point1[1] - right_point1[1]))
@@ -175,7 +178,12 @@ def compare_faces(_frame, _num_faces, _temp_faces_for_compare):
             distance = distance[1]
         else:
             distance = distance[0]
+
+        f = open("output/identification/result.txt", 'w')
+        f.write(str(distance))
+        f.close()
         print(distance)
+
         _temp_faces_for_compare = (None, None, False)
         return _temp_faces_for_compare
 
@@ -183,15 +191,14 @@ def compare_faces(_frame, _num_faces, _temp_faces_for_compare):
 
 """ Set criteria
 """
-def set_criteria(_direction, _num_frames, _head_direction_sum,
-                 _criteria_finished, _direction_ratio, _eye_direction_sum):
+def set_criteria(_direction, _head_direction_sum, _criteria_finished, _direction_ratio, _eye_direction_sum):
 
-    global criteria_frame_num
+    global criteria_frame_num, num_frames
 
     _head_direction_criteria = 0
     _eye_direction_criteria = 0
 
-    _num_frames += 1
+    num_frames += 1
     if _direction == "left" and (not _criteria_finished):
         _head_direction_sum += (_direction_ratio - 1) * (-1)
         # print(head_direction_sum)
@@ -199,16 +206,16 @@ def set_criteria(_direction, _num_frames, _head_direction_sum,
         _head_direction_sum += (_direction_ratio - 1)
         # print(head_direction_sum)
 
-    if _num_frames == criteria_frame_num:
-        _head_direction_criteria = (_head_direction_sum / _num_frames)
+    if num_frames == criteria_frame_num:
+        _head_direction_criteria = (_head_direction_sum / num_frames)
         print("HEAD : {}".format(_head_direction_criteria))
         _criteria_finished = True
 
-    if _num_frames == criteria_frame_num:
-        _eye_direction_criteria = (_eye_direction_sum / _num_frames)
+    if num_frames == criteria_frame_num:
+        _eye_direction_criteria = (_eye_direction_sum / num_frames)
         print("EYE : {}".format(_eye_direction_criteria))
 
-    return _head_direction_criteria, _eye_direction_criteria, _criteria_finished, _num_frames
+    return _head_direction_criteria, _eye_direction_criteria, _criteria_finished, num_frames
 
 
 
@@ -304,29 +311,44 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
 """ count the cheating frequency
 """
 def count_cheating(_duration):
-    global short_cheating_count, long_cheating_count
+    global short_cheating_count, long_cheating_count, warning_count, \
+        max_long_cheating, max_short_cheating, criteria_time
 
-    if _duration < 5:
+    if _duration < criteria_time:
         short_cheating_count += 1
 
-    elif _duration >= 5:
+    elif _duration >= criteria_time:
         long_cheating_count += 1
 
 
-    if short_cheating_count == 5:
-        print("짧은 경고 5회 누적!")
+    if short_cheating_count == max_short_cheating:
+        f = open("output/warnings/warning{}.txt".format(warning_count), 'w')
+        warning_count += 1
+        f.write("짧은 경고 5회 누적")
+        f.close()
+        print("짧은 경고 5회 누적")
         short_cheating_count = 0
 
-    if long_cheating_count == 1:
+    if long_cheating_count == max_long_cheating:
         print("긴 경고 1회 누적!")
+        f = open("output/warnings/warning{}.txt".format(warning_count), 'w')
+        warning_count += 1
+        f.write("긴 경고 1회 누적")
+        f.close()
         long_cheating_count = 0
 
 
 """ detect no faces warning
 """
 def warn_no_face(_duration):
-    if _duration > 10:
-        print("얼굴 감지 안됨 경고!")
+    global no_face_time, max_long_cheating, max_short_cheating, warning_count
+
+    if _duration > no_face_time:
+        print("얼굴 감지 안됨 경고")
+        f = open("output/warnings/warning{}.txt".format(warning_count), 'w')
+        warning_count += 1
+        f.write("{}초간 얼굴 감지 안됨 경고".format(no_face_time))
+        f.close()
 
 
 
@@ -334,7 +356,7 @@ def warn_no_face(_duration):
 """"""     # MAIN FUNCTION #     """"""
 """""""""""""""""""""""""""""""""""""""
 def main():
-
+    global num_frames
 
     cap = cv2.VideoCapture(0)
     detector = dlib.get_frontal_face_detector()
@@ -352,7 +374,6 @@ def main():
     eye_direction_sum = 0
     head_direction_criteria = 0
     eye_direction_criteria = 0
-    num_frames = 0
 
     # 초반 고개/눈 방향 기준 설정 여부 확인
     criteria_finished = False
@@ -373,7 +394,8 @@ def main():
             # 일정 시간 이상 얼굴 탐지 안되면 경고
             duration = time.time() - start_time_face
             start_time_face = time.time()
-            warn_no_face(duration)
+            if not num_frames == 0:
+                warn_no_face(duration)
             num_faces += 1
 
             landmarks = predictor(gray, face)
@@ -399,7 +421,7 @@ def main():
             # 최초 100프레임동안 고개, 눈동자 기준설정
             if not criteria_finished:
                 head_direction_criteria, eye_direction_criteria, criteria_finished, num_frames \
-                    = set_criteria(direction, num_frames, head_direction_sum,
+                    = set_criteria(direction, head_direction_sum,
                                    criteria_finished, direction_ratio, eye_direction_sum)
 
             # 눈동자가 인가된 범위를 벗어나면 경고
