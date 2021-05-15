@@ -2,9 +2,9 @@ import cv2
 import numpy as np
 import dlib
 from math import hypot
-import face_recognition
+#import face_recognition
 import time
-import threading
+from datetime import datetime
 
 """ global variables
 """
@@ -17,11 +17,18 @@ start_time_eye = 0
 start_time_head = 0
 criteria_frame_num = 50
 warning_count = 1
+cause = 0      # 1 : 눈동자 오른쪽
+               # 2 : 눈동자 왼쪽
+               # 3 : 고개 오른쪽
+               # 4 : 고개 왼쪽
 
 no_face_time = 10       # 몇초간 얼굴 탐지 안될 시 경고할지
 max_short_cheating = 5  # 짧은 시간 부정행위 횟수
 max_long_cheating = 1   # 짧은 시간 부정행위 횟수
 criteria_time = 5       # 짧은 시간 긴 시간 나누는 기준초
+
+path = "C:/ArgosAjou/"
+filename = "video_"
 
 
 
@@ -158,7 +165,10 @@ def get_head_angle_ratio(head_points, facial_landmarks, _frame):
 
 """ Compare faces
 """
+"""
 def compare_faces(_frame, _num_faces, _temp_faces_for_compare):
+    global path, filename
+
     if _num_faces == 1:
         _temp_faces_for_compare = (0, 0)
         imgS = cv2.cvtColor(_frame, cv2.COLOR_BGR2RGB)
@@ -179,14 +189,15 @@ def compare_faces(_frame, _num_faces, _temp_faces_for_compare):
         else:
             distance = distance[0]
 
-        f = open("output/identification/result.txt", 'w')
+        s = datetime.now().strftime("%Y%m%d%H%M%S")
+        f = open(path + filename + s + ".txt", 'w')
         f.write(str(distance))
         f.close()
         print(distance)
 
         _temp_faces_for_compare = (None, None, False)
         return _temp_faces_for_compare
-
+"""
 
 
 """ Set criteria
@@ -220,7 +231,8 @@ def set_criteria(_direction, _head_direction_sum, _criteria_finished, _direction
 
 
 def warn_eye_direction(_criteria_finished, _gaze_ratio, _eye_direction_criteria, _margin_eye):
-    global is_time_counting_eye, start_time_eye
+
+    global is_time_counting_eye, start_time_eye, cause
 
     #    숫자가 작아질수록 관대
     if _criteria_finished and _gaze_ratio < _eye_direction_criteria - _margin_eye:
@@ -228,6 +240,7 @@ def warn_eye_direction(_criteria_finished, _gaze_ratio, _eye_direction_criteria,
             start_time_eye = time.time()
             is_time_counting_eye = True
             print("시간 계산중...")
+            cause = 2
         #print("눈동자 왼쪽으로 벗어남")
         #print(_gaze_ratio)
 
@@ -237,6 +250,7 @@ def warn_eye_direction(_criteria_finished, _gaze_ratio, _eye_direction_criteria,
             start_time_eye = time.time()
             is_time_counting_eye = True
             print("시간 계산중...")
+            cause = 1
         #print("눈동자 오른쪽으로 벗어남")
         #print(_gaze_ratio)
 
@@ -245,14 +259,14 @@ def warn_eye_direction(_criteria_finished, _gaze_ratio, _eye_direction_criteria,
             print("종료[e]")
             duration = time.time() - start_time_eye
             print("duration : {}".format(duration))
-            count_cheating(duration)
+            count_cheating(duration, cause)
             is_time_counting_eye = False
 
 
 """ Head angle warning algorithm
 """
 def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_direction, _margin_head):
-    global start_time_head, is_time_counting_head
+    global start_time_head, is_time_counting_head, cause
 
     # 왼쪽 바라볼때
     if _criteria_finished and _head_direction_criteria < 0:
@@ -261,6 +275,7 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
                 start_time_head = time.time()
                 is_time_counting_head = True
                 print("시간 계산중...")
+                cause = 4
             print("고개 왼쪽으로 벗어남")
             #print(_head_direction)
 
@@ -269,6 +284,7 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
                 start_time_head = time.time()
                 is_time_counting_head = True
                 print("시간 계산중...")
+                cause = 3
             #print("고개 오른쪽으로 벗어남")
             #print(_head_direction)
 
@@ -277,7 +293,7 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
                 print("종료[h]")
                 duration = time.time() - start_time_head
                 print("duration : {}".format(duration))
-                count_cheating(duration)
+                count_cheating(duration, cause)
                 is_time_counting_head = False
 
     # 오른쪽 바라볼때
@@ -287,6 +303,7 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
                 start_time_head = time.time()
                 is_time_counting_head = True
                 print("시간 계산중...")
+                cause = 4
             #print("고개 왼쪽으로 벗어남")
             #print(_head_direction)
 
@@ -295,6 +312,7 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
                 start_time_head = time.time()
                 is_time_counting_head = True
                 print("시간 계산중...")
+                cause = 3
             #print("고개 오른쪽으로 벗어남")
             #print(_head_direction)
 
@@ -303,16 +321,16 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
                 print("종료[h]")
                 duration = time.time() - start_time_head
                 print("duration : {}".format(duration))
-                count_cheating(duration)
+                count_cheating(duration, cause)
                 is_time_counting_head = False
 
 
 
 """ count the cheating frequency
 """
-def count_cheating(_duration):
+def count_cheating(_duration, _cause):
     global short_cheating_count, long_cheating_count, warning_count, \
-        max_long_cheating, max_short_cheating, criteria_time
+        max_long_cheating, max_short_cheating, criteria_time, filename, path
 
     if _duration < criteria_time:
         short_cheating_count += 1
@@ -322,18 +340,20 @@ def count_cheating(_duration):
 
 
     if short_cheating_count == max_short_cheating:
-        f = open("output/warnings/warning{}.txt".format(warning_count), 'w')
+        s = datetime.now().strftime("%Y%m%d%H%M%S")
+        f = open(path + filename + s + ".txt", 'w')
         warning_count += 1
-        f.write("짧은 경고 5회 누적")
+        f.write("짧은 경고 5회 누적 + " + str(_cause))
         f.close()
         print("짧은 경고 5회 누적")
         short_cheating_count = 0
 
     if long_cheating_count == max_long_cheating:
         print("긴 경고 1회 누적!")
-        f = open("output/warnings/warning{}.txt".format(warning_count), 'w')
+        s = datetime.now().strftime("%Y%m%d%H%M%S")
+        f = open(path + filename + s + ".txt", 'w')
         warning_count += 1
-        f.write("긴 경고 1회 누적")
+        f.write("긴 경고 1회 누적 + " + str(_cause))
         f.close()
         long_cheating_count = 0
 
@@ -341,13 +361,14 @@ def count_cheating(_duration):
 """ detect no faces warning
 """
 def warn_no_face(_duration):
-    global no_face_time, max_long_cheating, max_short_cheating, warning_count
+    global no_face_time, max_long_cheating, max_short_cheating, warning_count, filename, path
 
     if _duration > no_face_time:
         print("얼굴 감지 안됨 경고")
-        f = open("output/warnings/warning{}.txt".format(warning_count), 'w')
+        s = datetime.now().strftime("%Y%m%d%H%M%S")
+        f = open(path + filename + s + ".txt", 'w')
         warning_count += 1
-        f.write("{}초간 얼굴 감지 안됨 경고".format(no_face_time))
+        f.write("{}초간 얼굴 감지 안됨 경고 + 5".format(no_face_time))
         f.close()
 
 
@@ -379,8 +400,8 @@ def main():
     criteria_finished = False
 
     # 눈 방향 탐지 위한 마진 (낮을수록 엄격하게 탐지)
-    margin_eye = 1
-    margin_head = 0.65
+    margin_eye = 2
+    margin_head = 0.75
 
 
     while True:
@@ -431,8 +452,8 @@ def main():
             warn_head_direction(criteria_finished, head_direction_criteria, head_direction, margin_head)
 
             # 얼굴을 통한 신원확인
-            if temp_faces_for_compare[2]:
-                temp_faces_for_compare = compare_faces(frame, num_faces, temp_faces_for_compare)
+            #if temp_faces_for_compare[2]:
+            #   temp_faces_for_compare = compare_faces(frame, num_faces, temp_faces_for_compare)
 
         # Print ont the screen
         cv2.imshow("Frame", frame)
@@ -450,4 +471,4 @@ def main():
 
 
 if __name__ == "__main__":
-	main()
+   main()
