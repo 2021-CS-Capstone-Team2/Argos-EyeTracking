@@ -2,17 +2,22 @@ import cv2
 import numpy as np
 import dlib
 from math import hypot
-#import face_recognition
+import face_recognition
 import time
 from datetime import datetime
+import os
 
 """ global variables
 """
 num_frames = 0
 short_cheating_count = 0
 long_cheating_count = 0
+
 is_time_counting_eye = False
 is_time_counting_head = False
+is_face_compared = False
+is_end_compare = False
+
 start_time_eye = 0
 start_time_head = 0
 criteria_frame_num = 50
@@ -28,6 +33,7 @@ max_long_cheating = 1   # 짧은 시간 부정행위 횟수
 criteria_time = 5       # 짧은 시간 긴 시간 나누는 기준초
 
 path = "C:/ArgosAjou/"
+path_identification = "C:/ArgosAjou/identification.txt"
 filename = "video_"
 
 
@@ -63,6 +69,31 @@ def get_blinking_ratio(facial_landmarks):
     blink_ratio = (blink_ratio_left + blink_ratio_right) / 2
 
     return blink_ratio
+
+
+
+"""Print face's area
+"""
+def print_face(facial_landmarks, _gray, _frame):
+    face_region = np.array([(facial_landmarks.part(0).x, facial_landmarks.part(0).y),
+                            (facial_landmarks.part(1).x, facial_landmarks.part(1).y),
+                            (facial_landmarks.part(2).x, facial_landmarks.part(2).y),
+                            (facial_landmarks.part(3).x, facial_landmarks.part(3).y),
+                            (facial_landmarks.part(4).x, facial_landmarks.part(4).y),
+                            (facial_landmarks.part(5).x, facial_landmarks.part(5).y),
+                            (facial_landmarks.part(6).x, facial_landmarks.part(6).y),
+                            (facial_landmarks.part(7).x, facial_landmarks.part(7).y),
+                            (facial_landmarks.part(8).x, facial_landmarks.part(8).y),
+                            (facial_landmarks.part(9).x, facial_landmarks.part(9).y),
+                            (facial_landmarks.part(10).x, facial_landmarks.part(10).y),
+                            (facial_landmarks.part(11).x, facial_landmarks.part(11).y),
+                            (facial_landmarks.part(12).x, facial_landmarks.part(12).y),
+                            (facial_landmarks.part(13).x, facial_landmarks.part(13).y),
+                            (facial_landmarks.part(14).x, facial_landmarks.part(14).y),
+                            (facial_landmarks.part(15).x, facial_landmarks.part(15).y),
+                            (facial_landmarks.part(16).x, facial_landmarks.part(16).y)], np.int32)
+
+    cv2.polylines(_frame, [face_region], True, (0, 255, 255), 1)
 
 
 
@@ -165,9 +196,9 @@ def get_head_angle_ratio(head_points, facial_landmarks, _frame):
 
 """ Compare faces
 """
-"""
+
 def compare_faces(_frame, _num_faces, _temp_faces_for_compare):
-    global path, filename
+    global path, is_end_compare
 
     if _num_faces == 1:
         _temp_faces_for_compare = (0, 0)
@@ -190,14 +221,18 @@ def compare_faces(_frame, _num_faces, _temp_faces_for_compare):
             distance = distance[0]
 
         s = datetime.now().strftime("%Y%m%d%H%M%S")
-        f = open(path + filename + s + ".txt", 'w')
+        f = open(path + "identification_result.txt", 'w')
         f.write(str(distance))
         f.close()
         print(distance)
 
         _temp_faces_for_compare = (None, None, False)
+        print("identification SUCCESS")
+        time.sleep(10)
+        print("eyetracking ACTIVATED")
+        is_end_compare = True
         return _temp_faces_for_compare
-"""
+
 
 
 """ Set criteria
@@ -276,7 +311,7 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
                 is_time_counting_head = True
                 print("시간 계산중...")
                 cause = 4
-            print("고개 왼쪽으로 벗어남")
+            #print("고개 왼쪽으로 벗어남")
             #print(_head_direction)
 
         elif _head_direction[0] == "right" and _head_direction[1] > 1 + _head_direction_criteria + _margin_head:
@@ -368,7 +403,7 @@ def warn_no_face(_duration):
         s = datetime.now().strftime("%Y%m%d%H%M%S")
         f = open(path + filename + s + ".txt", 'w')
         warning_count += 1
-        f.write("{}초간 얼굴 감지 안됨 경고 + 5".format(no_face_time))
+        f.write("{:.1f} 초간 얼굴 감지 안됨 경고 + 5".format(_duration))
         f.close()
 
 
@@ -377,7 +412,7 @@ def warn_no_face(_duration):
 """"""     # MAIN FUNCTION #     """"""
 """""""""""""""""""""""""""""""""""""""
 def main():
-    global num_frames
+    global num_frames, is_face_compared, is_end_compare
 
     cap = cv2.VideoCapture(0)
     detector = dlib.get_frontal_face_detector()
@@ -403,7 +438,6 @@ def main():
     margin_eye = 2
     margin_head = 0.75
 
-
     while True:
         _, frame = cap.read()
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -412,14 +446,30 @@ def main():
 
         # 얼굴 인식 부분
         for face in faces:
+
+            landmarks = predictor(gray, face)
+
+            # 신원 인증 부분 (path_identification에 'identification.txt' 파일이 있으면 신원인증 진행
+            if os.path.isfile(path_identification) and not is_face_compared:
+                temp_faces_for_compare = (0, 0, True)
+                is_face_compared = True
+
+            elif not is_face_compared:
+                print_face(landmarks, gray, frame)
+                cv2.imshow("Frame", frame)
+                cv2.waitKey(1)
+                continue
+
             # 일정 시간 이상 얼굴 탐지 안되면 경고
             duration = time.time() - start_time_face
             start_time_face = time.time()
-            if not num_frames == 0:
+
+            if not num_frames == 0 and not is_end_compare:
                 warn_no_face(duration)
             num_faces += 1
 
-            landmarks = predictor(gray, face)
+            if is_end_compare:
+                is_end_compare = False
 
             """
             # 눈을 추적하며 깜박임 감지
@@ -452,19 +502,19 @@ def main():
             warn_head_direction(criteria_finished, head_direction_criteria, head_direction, margin_head)
 
             # 얼굴을 통한 신원확인
-            #if temp_faces_for_compare[2]:
-            #   temp_faces_for_compare = compare_faces(frame, num_faces, temp_faces_for_compare)
+            if temp_faces_for_compare[2]:
+               temp_faces_for_compare = compare_faces(frame, num_faces, temp_faces_for_compare)
 
         # Print ont the screen
         cv2.imshow("Frame", frame)
 
         key = cv2.waitKey(1)
+
         # ESC 입력시 프로그램 종료
         if key == 27:
             break
-        # 신원확인 필요시 p 키 입력
-        elif key == 112:
-            temp_faces_for_compare = (0, 0, True)
+
+
 
     cap.release()
     cv2.destroyAllWindows()
