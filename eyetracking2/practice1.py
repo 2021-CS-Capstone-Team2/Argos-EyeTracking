@@ -22,32 +22,33 @@ start_time_eye = 0
 start_time_head = 0
 criteria_frame_num = 50
 warning_count = 1
-cause = 0      # 1 : 눈동자 오른쪽
-               # 2 : 눈동자 왼쪽
-               # 3 : 고개 오른쪽
-               # 4 : 고개 왼쪽
+cause = 0  # 1 : 눈동자 오른쪽
+# 2 : 눈동자 왼쪽
+# 3 : 고개 오른쪽
+# 4 : 고개 왼쪽
 
-no_face_time = 10       # 몇초간 얼굴 탐지 안될 시 경고할지
+no_face_time = 10  # 몇초간 얼굴 탐지 안될 시 경고할지
 max_short_cheating = 5  # 짧은 시간 부정행위 횟수
-max_long_cheating = 1   # 짧은 시간 부정행위 횟수
-criteria_time = 5       # 짧은 시간 긴 시간 나누는 기준초
+max_long_cheating = 1  # 짧은 시간 부정행위 횟수
+criteria_time = 5  # 짧은 시간 긴 시간 나누는 기준초
 
 path = "C:/ArgosAjou/"
 path_identification = "C:/ArgosAjou/identification.txt"
 filename = "video_"
 
-
-
 """ determine mid point
 """
+
+
 def midpoint(p1, p2):
     return int((p1.x + p2.x) / 2), int((p1.y + p2.y) / 2)
-
 
 
 """ Detect face & eye's location
     and blinking
 """
+
+
 def get_blinking_ratio(facial_landmarks):
     left_point1 = (facial_landmarks.part(36).x, facial_landmarks.part(36).y)
     right_point1 = (facial_landmarks.part(39).x, facial_landmarks.part(39).y)
@@ -71,9 +72,10 @@ def get_blinking_ratio(facial_landmarks):
     return blink_ratio
 
 
-
 """Print face's area
 """
+
+
 def print_face(facial_landmarks, _gray, _frame):
     face_region = np.array([(facial_landmarks.part(0).x, facial_landmarks.part(0).y),
                             (facial_landmarks.part(1).x, facial_landmarks.part(1).y),
@@ -91,14 +93,17 @@ def print_face(facial_landmarks, _gray, _frame):
                             (facial_landmarks.part(13).x, facial_landmarks.part(13).y),
                             (facial_landmarks.part(14).x, facial_landmarks.part(14).y),
                             (facial_landmarks.part(15).x, facial_landmarks.part(15).y),
-                            (facial_landmarks.part(16).x, facial_landmarks.part(16).y)], np.int32)
+                            (facial_landmarks.part(16).x, facial_landmarks.part(16).y),
+                            (facial_landmarks.part(18).x, facial_landmarks.part(18).y),
+                            (facial_landmarks.part(23).x, facial_landmarks.part(23).y)], np.int32)
 
     cv2.polylines(_frame, [face_region], True, (0, 255, 255), 1)
 
 
-
 """ Detect eye's gazing
 """
+
+
 def get_gaze_ratio(eye_points, facial_landmarks, _gray, _frame):
     eye_region = np.array([(facial_landmarks.part(eye_points[0]).x, facial_landmarks.part(eye_points[0]).y),
                            (facial_landmarks.part(eye_points[1]).x, facial_landmarks.part(eye_points[1]).y),
@@ -134,7 +139,7 @@ def get_gaze_ratio(eye_points, facial_landmarks, _gray, _frame):
     # cv2.imshow("right", right_side_threshold)
 
     # left, right side white 가 10 미만이면 눈 감은것으로 인식
-    if left_side_white < 10 or right_side_white < 10:
+    if left_side_white < 5 or right_side_white < 5:
         _gaze_ratio = 1
     else:
         _gaze_ratio = left_side_white / right_side_white
@@ -142,9 +147,10 @@ def get_gaze_ratio(eye_points, facial_landmarks, _gray, _frame):
     return _gaze_ratio
 
 
-
 """ Detect head's direction
 """
+
+
 def get_head_angle_ratio(head_points, facial_landmarks, _frame):
     # 코의 가로선 표시
     nose_region1 = np.array([(facial_landmarks.part(head_points[0]).x, facial_landmarks.part(head_points[0]).y),
@@ -193,9 +199,9 @@ def get_head_angle_ratio(head_points, facial_landmarks, _frame):
     return _head_direction, _direction_ratio
 
 
-
 """ Compare faces
 """
+
 
 def compare_faces(_frame, _num_faces, _temp_faces_for_compare):
     global path, is_end_compare
@@ -220,25 +226,33 @@ def compare_faces(_frame, _num_faces, _temp_faces_for_compare):
         else:
             distance = distance[0]
 
-        s = datetime.now().strftime("%Y%m%d%H%M%S")
-        f = open(path + "identification_result.txt", 'w')
-        f.write(str(distance))
-        f.close()
         print(distance)
 
+        if distance > 0.6:
+            identification_result = False
+        else:
+            identification_result = True
+
+        s = datetime.now().strftime("%Y%m%d%H%M%S")
+        f = open(path + "identification_result.txt", 'w')
+        f.write(str(identification_result))
+        f.close()
+
         _temp_faces_for_compare = (None, None, False)
-        print("identification SUCCESS")
-        time.sleep(10)
-        print("eyetracking ACTIVATED")
+        print("*** identification SUCCESS ***\n\n")
+        print("    LOADING . . . \n\n")
+        cv2.destroyAllWindows()
+        time.sleep(5)
+        print("*** eyetracking ACTIVATED ***")
         is_end_compare = True
         return _temp_faces_for_compare
 
 
-
 """ Set criteria
 """
-def set_criteria(_direction, _head_direction_sum, _criteria_finished, _direction_ratio, _eye_direction_sum):
 
+
+def set_criteria(_direction, _head_direction_sum, _criteria_finished, _direction_ratio, _eye_direction_sum):
     global criteria_frame_num, num_frames
 
     _head_direction_criteria = 0
@@ -264,9 +278,7 @@ def set_criteria(_direction, _head_direction_sum, _criteria_finished, _direction
     return _head_direction_criteria, _eye_direction_criteria, _criteria_finished, num_frames
 
 
-
 def warn_eye_direction(_criteria_finished, _gaze_ratio, _eye_direction_criteria, _margin_eye):
-
     global is_time_counting_eye, start_time_eye, cause
 
     #    숫자가 작아질수록 관대
@@ -276,8 +288,8 @@ def warn_eye_direction(_criteria_finished, _gaze_ratio, _eye_direction_criteria,
             is_time_counting_eye = True
             print("시간 계산중...")
             cause = 2
-        #print("눈동자 왼쪽으로 벗어남")
-        #print(_gaze_ratio)
+        # print("눈동자 왼쪽으로 벗어남")
+        # print(_gaze_ratio)
 
     #    숫자가 커질수록 관대
     elif _criteria_finished and _gaze_ratio > _eye_direction_criteria + _margin_eye:
@@ -286,8 +298,8 @@ def warn_eye_direction(_criteria_finished, _gaze_ratio, _eye_direction_criteria,
             is_time_counting_eye = True
             print("시간 계산중...")
             cause = 1
-        #print("눈동자 오른쪽으로 벗어남")
-        #print(_gaze_ratio)
+        # print("눈동자 오른쪽으로 벗어남")
+        # print(_gaze_ratio)
 
     else:
         if is_time_counting_eye:
@@ -296,10 +308,13 @@ def warn_eye_direction(_criteria_finished, _gaze_ratio, _eye_direction_criteria,
             print("duration : {}".format(duration))
             count_cheating(duration, cause)
             is_time_counting_eye = False
+            time.sleep(1)
 
 
 """ Head angle warning algorithm
 """
+
+
 def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_direction, _margin_head):
     global start_time_head, is_time_counting_head, cause
 
@@ -311,8 +326,8 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
                 is_time_counting_head = True
                 print("시간 계산중...")
                 cause = 4
-            #print("고개 왼쪽으로 벗어남")
-            #print(_head_direction)
+            # print("고개 왼쪽으로 벗어남")
+            # print(_head_direction)
 
         elif _head_direction[0] == "right" and _head_direction[1] > 1 + _head_direction_criteria + _margin_head:
             if not is_time_counting_head:
@@ -320,8 +335,8 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
                 is_time_counting_head = True
                 print("시간 계산중...")
                 cause = 3
-            #print("고개 오른쪽으로 벗어남")
-            #print(_head_direction)
+            # print("고개 오른쪽으로 벗어남")
+            # print(_head_direction)
 
         else:
             if is_time_counting_head:
@@ -330,6 +345,7 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
                 print("duration : {}".format(duration))
                 count_cheating(duration, cause)
                 is_time_counting_head = False
+                time.sleep(1)
 
     # 오른쪽 바라볼때
     if _criteria_finished and _head_direction_criteria >= 0:
@@ -339,8 +355,8 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
                 is_time_counting_head = True
                 print("시간 계산중...")
                 cause = 4
-            #print("고개 왼쪽으로 벗어남")
-            #print(_head_direction)
+            # print("고개 왼쪽으로 벗어남")
+            # print(_head_direction)
 
         elif _head_direction[0] == "right" and _head_direction[1] > 1 + _head_direction_criteria + _margin_head:
             if not is_time_counting_head:
@@ -348,8 +364,8 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
                 is_time_counting_head = True
                 print("시간 계산중...")
                 cause = 3
-            #print("고개 오른쪽으로 벗어남")
-            #print(_head_direction)
+            # print("고개 오른쪽으로 벗어남")
+            # print(_head_direction)
 
         else:
             if is_time_counting_head:
@@ -358,11 +374,13 @@ def warn_head_direction(_criteria_finished, _head_direction_criteria, _head_dire
                 print("duration : {}".format(duration))
                 count_cheating(duration, cause)
                 is_time_counting_head = False
-
+                time.sleep(1)
 
 
 """ count the cheating frequency
 """
+
+
 def count_cheating(_duration, _cause):
     global short_cheating_count, long_cheating_count, warning_count, \
         max_long_cheating, max_short_cheating, criteria_time, filename, path
@@ -372,7 +390,6 @@ def count_cheating(_duration, _cause):
 
     elif _duration >= criteria_time:
         long_cheating_count += 1
-
 
     if short_cheating_count == max_short_cheating:
         s = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -395,6 +412,8 @@ def count_cheating(_duration, _cause):
 
 """ detect no faces warning
 """
+
+
 def warn_no_face(_duration):
     global no_face_time, max_long_cheating, max_short_cheating, warning_count, filename, path
 
@@ -407,10 +426,11 @@ def warn_no_face(_duration):
         f.close()
 
 
-
 """""""""""""""""""""""""""""""""""""""
 """"""     # MAIN FUNCTION #     """"""
 """""""""""""""""""""""""""""""""""""""
+
+
 def main():
     global num_frames, is_face_compared, is_end_compare
 
@@ -435,7 +455,7 @@ def main():
     criteria_finished = False
 
     # 눈 방향 탐지 위한 마진 (낮을수록 엄격하게 탐지)
-    margin_eye = 2
+    margin_eye = 1.5
     margin_head = 0.75
 
     while True:
@@ -450,15 +470,9 @@ def main():
             landmarks = predictor(gray, face)
 
             # 신원 인증 부분 (path_identification에 'identification.txt' 파일이 있으면 신원인증 진행
-            if os.path.isfile(path_identification) and not is_face_compared:
+            if not is_face_compared:
                 temp_faces_for_compare = (0, 0, True)
                 is_face_compared = True
-
-            elif not is_face_compared:
-                print_face(landmarks, gray, frame)
-                cv2.imshow("Frame", frame)
-                cv2.waitKey(1)
-                continue
 
             # 일정 시간 이상 얼굴 탐지 안되면 경고
             duration = time.time() - start_time_face
@@ -468,8 +482,8 @@ def main():
                 warn_no_face(duration)
             num_faces += 1
 
-            if is_end_compare:
-                is_end_compare = False
+            if not is_end_compare:
+                is_end_compare = True
 
             """
             # 눈을 추적하며 깜박임 감지
@@ -503,22 +517,25 @@ def main():
 
             # 얼굴을 통한 신원확인
             if temp_faces_for_compare[2]:
-               temp_faces_for_compare = compare_faces(frame, num_faces, temp_faces_for_compare)
+                temp_faces_for_compare = compare_faces(frame, num_faces, temp_faces_for_compare)
 
         # Print ont the screen
-        cv2.imshow("Frame", frame)
-
-        key = cv2.waitKey(1)
+        if temp_faces_for_compare[2]:
+            cv2.imshow("Frame", frame)
+            key = cv2.waitKey(1)
+        else:
+            key = cv2.waitKey(1)
+            cv2.destroyAllWindows()
 
         # ESC 입력시 프로그램 종료
         if key == 27:
             break
-
-
 
     cap.release()
     cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
-   main()
+    main()
+
+# 바로 신원인식하면 에러뜸
